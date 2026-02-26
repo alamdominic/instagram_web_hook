@@ -1,0 +1,84 @@
+# VARIABLES DE ENTORNO
+.env
+.env.*
+!.env.example
+
+# PYTHON
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.pyc
+
+# ENTORNOS VIRTUALES
+venv/
+env/
+.venv/
+.env/
+ENV/
+env.bak/
+venv.bak/
+
+# FASTAPI / UVICORN
+*.log
+uvicorn.log
+
+# DEPENDENCIAS
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# BASES DE DATOS
+*.db
+*.sqlite
+*.sqlite3
+
+# TESTING
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+
+# EDITORES E IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# DOCKER
+.dockerignore
+
+# JUPYTER
+.ipynb_checkpoints
+*.ipynb
+
+# MYPY / LINTERS
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+
+# ARCHIVOS TEMPORALES
+tmp/
+temp/
+*.tmp
+*.bak
+
+#db
+db/

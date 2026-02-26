@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     POSTGRES_HOST: str
     POSTGRES_PORT: int
     POSTGRES_DB: str
+    DB_ECHO: bool = False  # Controla logs SQL independientemente de DEBUG
 
     model_config = SettingsConfigDict(env_file=".env")  # ← reemplaza class Config
 

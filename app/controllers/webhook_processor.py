@@ -37,6 +37,13 @@ class WebhookProcessor:
                     logger.info(f"Nuevo mensaje recibido. ID: {entry.id}")
                 elif change.field == "stories":
                     logger.info(f"Nueva historia recibida. ID: {entry.id}")
+                elif change.field in [
+                    "standby",
+                    "messaging_seen",
+                    "messaging_handover",
+                ]:
+                    # Eventos de latido/"visto"/handover comunes que no requieren logueo
+                    logger.debug(f"Evento rutinario recibido: {change.field}")
                 else:
                     logger.warning(f"Campo no manejado: {change.field}")
 

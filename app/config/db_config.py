@@ -44,7 +44,7 @@ class Database:
         echo=True en DEBUG para ver los SQL en consola.
         """
         url = self._build_url()
-        return create_async_engine(url, echo=settings.DEBUG)
+        return create_async_engine(url, echo=settings.DB_ECHO)
 
     def _create_session_factory(self):
         """

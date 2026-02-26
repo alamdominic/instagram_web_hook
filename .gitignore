@@ -82,3 +82,6 @@ temp/
 
 #db
 db/
+
+#docs extras
+docker.html

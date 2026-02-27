@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
     DB_ECHO: bool = False  # Controla logs SQL independientemente de DEBUG
 
+    # Email
+    EMAIL_SENDER: str
+    EMAIL_PASSWORD: str
+    RECIPIENT_EMAIL: str
+
     model_config = SettingsConfigDict(env_file=".env")  # ← reemplaza class Config
 
 

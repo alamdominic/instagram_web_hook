@@ -7,16 +7,34 @@ logger = logging.getLogger(__name__)
 
 
 class WebhookProcessor:
-    """Controlador para manejar los eventos del webhook de Instagram.
-    Aquí se implementaría la lógica para manejar los eventos que Instagram envía al webhook.
-    Por ejemplo, podríamos leer el payload, validar la firma, y luego procesar los datos.
+    """
+    Controlador para procesar eventos de webhook de Instagram.
+
+    Se encarga de validar la estructura básica del payload, identificar el tipo de evento,
+    registrar logs informativos y persistir los datos en el repositorio.
     """
 
     def __init__(self, payload: WebhookPayload, repository: WebhookLogRepository):
+        """
+        Inicializa el procesador con el payload del webhook y el repositorio de logs.
+
+        Args:
+            payload (WebhookPayload): El objeto validado con los datos del webhook.
+            repository (WebhookLogRepository): Repositorio para guardar el log en la DB.
+        """
         self.payload = payload
         self.repository = repository
 
     def process(self):
+        """
+        Valida que el webhook corresponda a un objeto 'instagram' y contenga entradas.
+
+        Raises:
+            HTTPException: Si el objeto no es 'instagram' o no hay entradas (entry).
+
+        Returns:
+            dict: Mensaje de confirmación de recepción.
+        """
         if self.payload.object != "instagram":
             raise HTTPException(
                 status_code=400, detail="Objeto no soportado, se esperaba instagram"
@@ -27,6 +45,12 @@ class WebhookProcessor:
         return {"message": "Webhook recibido"}
 
     def _handle_events(self):
+        """
+        Tarea en segundo plano para procesar lógica específica de cada evento.
+
+        Itera sobre las entradas y cambios del payload para realizar acciones específicas
+        como logging diferenciado según el tipo de campo (comments, mentions, etc.).
+        """
         for entry in self.payload.entry:
             for change in entry.changes:
                 if change.field == "comments":
@@ -49,8 +73,10 @@ class WebhookProcessor:
 
     async def save_log(self):
         """
-        Determina el event_type leyendo el primer change del primer entry.
-        Persiste el payload completo como JSONB crudo → el ETL limpia después.
+        Guarda el payload del webhook en la base de datos.
+
+        Determina el event_type (ej. "comments") y persiste el payload completo
+        como un objeto JSONB crudo utilizando el repositorio.
         """
         event_type = self._extract_event_type()  # "comments" | "messages" | etc.
         raw_payload = self.payload.model_dump()  # dict serializable
@@ -58,6 +84,12 @@ class WebhookProcessor:
         await self.repository.save(event_type, raw_payload)
 
     def _extract_event_type(self) -> str:
+        """
+        Extrae el tipo de evento del primer cambio en la primera entrada del payload.
+
+        Returns:
+            str: El nombre del campo que cambió (ej. "comments"), o "unknown" si no se encuentra.
+        """
         try:
             return self.payload.entry[0].changes[0].field
         except (IndexError, AttributeError):

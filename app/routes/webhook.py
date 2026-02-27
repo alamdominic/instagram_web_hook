@@ -12,17 +12,30 @@ logger = logging.getLogger(__name__)
 
 @router.get("/health")
 def health_check():
+    """
+    Endpoint de verificación de estado.
+    Retorna un JSON simple para confirmar que el servicio está activo.
+    """
     return {"status": "ok", "message": "Service is alive"}
 
 
 @router.get("/webhook")
 async def root(request: Request):
     """
-    Leemos los query params manualmente desde request.query_params
-    en lugar de declararlos como Query(...) para evitar que FastAPI
-    rechace la petición de Meta con 422 antes de que nuestro código corra.
+    Endpoint de verificación para Meta (Instagram/Facebook).
 
-    Esto también nos permite loguear exactamente qué envió Meta.
+    Maneja el desafío 'hub.challenge' enviado por Meta para confirmar la propiedad del endpoint.
+    Valida 'hub.mode' y 'hub.verify_token'.
+
+    Args:
+        request (Request): Objeto de solicitud FastAPI para acceder a los query params raw.
+
+    Returns:
+        int: El valor de 'hub.challenge' si la verificación es exitosa.
+
+    Raises:
+        HTTPException (400): Si faltan parámetros de verificación.
+        HTTPException (403): Si el token de verificación es incorrecto (manejado internamente por WebhookChecker).
     """
     # Log completo de lo que Meta realmente envió — útil para depurar
     params = dict(request.query_params)
@@ -52,6 +65,24 @@ async def receive_webhook(
     request: Request,
     db_session=Depends(get_db),
 ):
+    """
+    Endpoint principal para recibir notificaciones de webhook de Instagram.
+
+    Flujo:
+    1. Valida la firma de seguridad (X-Hub-Signature-256) antes de procesar nada.
+    2. Procesa la estructura del payload mediante WebhookProcessor.
+    3. Guarda el log crudo en la base de datos de forma asíncrona.
+    4. Agenda tareas en segundo plano (_handle_events) para lógica no bloqueante.
+
+    Args:
+        payload (WebhookPayload): Cuerpo del mensaje validado por Pydantic.
+        background_tasks (BackgroundTasks): Gestor de tareas en segundo plano de FastAPI.
+        request (Request): Objeto request para verificar headers de firma.
+        db_session: Sesión de base de datos inyectada.
+
+    Returns:
+        dict: Mensaje de confirmación.
+    """
     repository = WebhookLogRepository(db_session)
     checker = WebhookChecker()
     await checker.verify_signature(request)  # si falla → 403

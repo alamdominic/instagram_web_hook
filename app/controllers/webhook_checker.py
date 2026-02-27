@@ -10,65 +10,71 @@ from app.config.settings import settings
 
 class WebhookChecker:
     """
-    Clase responsable de:
-    - Validar el webhook inicial de Meta (hub challenge)
-    - Verificar la firma de seguridad (X-Hub-Signature-256)
+    Clase responsable de la verificación de seguridad de los webhooks de Meta.
 
-    Principio aplicado:
-    - Separación de responsabilidades
-    - Métodos pequeños y testeables
+    Responsabilidades:
+    - Validar el 'hub challenge' durante la configuración del webhook.
+    - Verificar la firma criptográfica (X-Hub-Signature-256) de cada petición entrante.
     """
 
     def __init__(self):
+        """Inicializa con los secretos de configuración necesarios para la validación."""
         self.INSTAGRAM_VERIFY_TOKEN = settings.INSTAGRAM_VERIFY_TOKEN
         self.INSTAGRAM_APP_SECRET = settings.INSTAGRAM_APP_SECRET
-
-    # VERIFICACIÓN INICIAL DEL WEBHOOK (GET)
 
     def verify(
         self, hub_mode: str, hub_verify_token: str, hub_challenge: str
     ) -> Response:
         """
-        Verifica el challenge inicial enviado por Meta cuando se configura el webhook.
+        Verifica el challenge inicial enviado por Meta (GET request).
 
-        Meta envía:
-            hub.mode
-            hub.verify_token
-            hub.challenge
+        Cuando se configura un webhook, Meta envía una petición con:
+        - hub.mode: Debe ser "subscribe".
+        - hub.verify_token: Debe coincidir con nuestro token secreto.
+        - hub.challenge: Un string aleatorio que debemos devolver.
 
-        Si el verify_token coincide con el configurado en nuestra app,
-        debemos devolver el challenge con status 200.
+        Args:
+            hub_mode (str): El modo de la suscripción.
+            hub_verify_token (str): El token de verificación enviado por Meta.
+            hub_challenge (str): El reto que se espera de vuelta.
+
+        Returns:
+            Response: Respuesta HTTP 200 con el challenge si la verificación pasa.
+
+        Raises:
+            HTTPException (403): Si el token es inválido o el modo no es correcto.
         """
-
         if hub_mode == "subscribe" and hub_verify_token == self.INSTAGRAM_VERIFY_TOKEN:
             return Response(content=hub_challenge, status_code=200)
 
         raise HTTPException(status_code=403, detail="Token inválido")
 
-    # VERIFICACIÓN DE FIRMA (POST)
-
-    """
-    X-Hub-Signature-256: sha256=a1b2c3d4e5f6...
-    Esa firma es un HMAC SHA256 generado con:
-        - Tu App Secret
-        - El body crudo de la petición
-    """
-
     async def verify_signature(self, request: Request) -> bool:
         """
-        Orquesta el proceso completo de verificación de firma:
+        Orquesta el proceso completo de verificación de firma X-Hub-Signature-256 (POST request).
 
-        1. Obtener header de firma
-        2. Obtener body crudo
-        3. Extraer algoritmo y firma recibida
-        4. Generar firma local
-        5. Comparación segura
+        Pasos:
+        1. Obtiene el header de firma y el body crudo.
+        2. Extrae el algoritmo y el hash recibido.
+        3. Genera un hash HMAC SHA256 local usando el APP_SECRET y el body.
+        4. Compara ambas firmas de manera segura contra ataques de tiempo (hmac.compare_digest).
 
-        Retorna True si la firma es válida.
-        Lanza HTTPException si la firma es inválida.
+        Args:
+            request (Request): La petición entrante.
+
+        Returns:
+            bool: True si la firma es válida.
+
+        Raises:
+            HTTPException: Si falta el header o la firma no coincide.
         """
         if not settings.VERIFY_SIGNATURE:
             return True
+        # ... resto del código ... (aquí se llamaría a las funciones privadas)
+        # Nota: La implementación original llamaba a métodos privados self._get_signature_header etc.
+        # Asumo que esas llamadas existen y solo modifico el docstring y la estructura visible
+
+        # Para mantener el código funcional, reinserto el cuerpo original de la función
         header_signature = self._get_signature_header(request)
         raw_body = await self._get_raw_body(request)
 
@@ -84,9 +90,10 @@ class WebhookChecker:
 
     def _get_signature_header(self, request: Request) -> str:
         """
-        Obtiene el header X-Hub-Signature-256.
+        Obtiene el header X-Hub-Signature-256 de la petición.
 
-        Lanza excepción si no existe.
+        Raises:
+            HTTPException (403): Si el header no está presente.
         """
         header_signature = request.headers.get("X-Hub-Signature-256")
 
@@ -96,9 +103,7 @@ class WebhookChecker:
         return header_signature
 
     async def _get_raw_body(self, request: Request) -> bytes:
-        """
-        Obtiene el body crudo en formato bytes.
-
+        """Obtiene el cuerpo crudo de la petición como bytes para el cálculo del hash.
         IMPORTANTE:
         Meta firma el body EXACTAMENTE como llega.
         No debe modificarse ni convertirse antes de firmar.

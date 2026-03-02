@@ -1,49 +1,80 @@
-# app/repositories/metrics_repository.py
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.webhook_log import WebhookLog
-from datetime import date
+import logging
+import datetime
+from app.repositories.metrics_repositories import MetricsRepository
+
+logger = logging.getLogger(__name__)
 
 
-class MetricsRepository:
-    def __init__(self, db_session: AsyncSession):
-        self.db_session = db_session
+class MetricsService:
+    def __init__(self, db_instance):
+        """
+        Servicio para generar reportes de métricas.
 
-    async def get_total_events(self, target_date: date) -> int:
-        # EQUIVALENTE A "SELECT COUNT(*) FROM SCHEMA.TABLE WHERE DATE(received_at) = :target_date"
-        result = await self.db_session.execute(
-            select(func.count())
-            .select_from(WebhookLog)
-            .filter(func.date(WebhookLog.received_at) == target_date)
-        )
-        return result.scalar()
+        Args:
+            db_instance: Instancia de la clase Database (app.config.db_config.db)
+                        que contiene session_factory.
+        """
+        self.db = db_instance
 
-    async def get_peak_hour(self, target_date: date) -> dict:
-        # EQUIVALENTE A "SELECT EXTRACT(HOUR FROM received_at) AS hora, COUNT(*) AS total FROM SCHEMA.TABLE WHERE DATE(received_at) = :target_date GROUP BY hora ORDER BY total DESC LIMIT 1"
-        result = await self.db_session.execute(
-            select(
-                func.extract("hour", WebhookLog.received_at).label("hora"),
-                func.count().label("total"),
-            )
-            .filter(func.date(WebhookLog.received_at) == target_date)
-            .group_by("hora")
-            .order_by(func.count().desc())
-            .limit(1)
-        )
-        row = result.fetchone()
-        return {"hora": int(row.hora), "total": row.total} if row else None
+    async def generate_daily_report(self) -> str:
+        """Genera el contenido del reporte diario."""
+        today = datetime.date.today()
 
-    async def get_weekly_summary(self) -> list:
-        # EQUIVALENTE A "SELECT DATE(received_at) AS dia, COUNT(*) AS total FROM SCHEMA.TABLE WHERE received_at >= NOW() - INTERVAL '7 days' GROUP BY dia ORDER BY dia"
-        result = await self.db_session.execute(
-            select(
-                func.date(WebhookLog.received_at).label("dia"),
-                func.count().label("total"),
-            )
-            .filter(
-                WebhookLog.received_at >= func.now() - func.cast("7 days", type_=None)
-            )
-            .group_by("dia")
-            .order_by("dia")
-        )
-        return [{"dia": str(row.dia), "total": row.total} for row in result.fetchall()]
+        # Obtenemos una nueva sesión para esta operación
+        async with self.db.session_factory() as session:
+            # Creamos el repositorio con esa sesión
+            repo = MetricsRepository(session)
+
+            try:
+                # Obtenemos los datos
+                total_events = await repo.get_total_events(today)
+                peak_data = await repo.get_peak_hour(today)
+
+                # Construimos el reporte
+                report = f"REPORTE DIARIO DE WEBHOOKS ({today})\n"
+                report += "=" * 40 + "\n\n"
+                report += f"Total de eventos recibidos hoy: {total_events}\n"
+
+                if peak_data:
+                    report += f"Hora pico de actividad: {peak_data['hora']}:00 hrs ({peak_data['total']} eventos)\n"
+                else:
+                    report += (
+                        "No hubo suficiente actividad para determinar hora pico.\n"
+                    )
+
+                return report
+
+            except Exception as e:
+                logger.error(f"Error generando reporte diario: {e}")
+                return None
+
+    async def generate_weekly_report(self) -> str:
+        """Genera el contenido del reporte semanal."""
+        try:
+            async with self.db.session_factory() as session:
+                repo = MetricsRepository(session)
+
+                summary = await repo.get_weekly_summary()
+
+                if not summary:
+                    return "No hubo actividad en los últimos 7 días."
+
+                report = "RESUMEN SEMANAL DE WEBHOOKS\n"
+                report += "=" * 40 + "\n\n"
+                report += f"{'Día':<15} | {'Total Eventos'}\n"
+                report += "-" * 30 + "\n"
+
+                total_week = 0
+                for day in summary:
+                    # day es un dict {'dia': 'YYYY-MM-DD', 'total': N}
+                    report += f"{day['dia']:<15} | {day['total']}\n"
+                    total_week += day["total"]
+
+                report += "\n" + "-" * 30 + "\n"
+                report += f"Total semanal: {total_week}\n"
+
+                return report
+
+        except Exception as e:
+            logger.error(f"Error generando reporte semanal: {e}")
+            return None

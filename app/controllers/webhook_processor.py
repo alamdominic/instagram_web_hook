@@ -65,6 +65,10 @@ class WebhookProcessor:
                     "standby",
                     "messaging_seen",
                     "messaging_handover",
+                    "message_reactions",
+                    "message_edit",
+                    "messaging_referral",
+                    "messaging_optins",
                 ]:
                     # Eventos de latido/"visto"/handover comunes que no requieren logueo
                     logger.debug(f"Evento rutinario recibido: {change.field}")

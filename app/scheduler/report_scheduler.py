@@ -28,7 +28,7 @@ class ReportScheduler:
         # Reporte diario: Se ejecuta todos los días a las 8:00 AM
         self.scheduler.add_job(
             self._daily_job,
-            CronTrigger(hour=20, minute=10),
+            CronTrigger(hour=19, minute=25, timezone="UTC"),
             id="daily_report",
             replace_existing=True,
         )
@@ -36,7 +36,7 @@ class ReportScheduler:
         # Reporte semanal: Se ejecuta todos los lunes a las 9:00 AM
         self.scheduler.add_job(
             self._weekly_job,
-            CronTrigger(day_of_week="mon", hour=20, minute=10),
+            CronTrigger(day_of_week="tue", hour=19, minute=25, timezone="UTC"),
             id="weekly_report",
             replace_existing=True,
         )

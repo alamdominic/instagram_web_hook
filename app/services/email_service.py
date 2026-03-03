@@ -14,7 +14,11 @@ class EmailService:
     def __init__(self, settings):
         self.sender = settings.EMAIL_SENDER
         self.password = settings.EMAIL_PASSWORD
-        self.recipient = settings.RECIPIENT_EMAIL  # destinatario del correo
+        self.recipients = [
+            email.strip()
+            for email in settings.RECIPIENT_EMAIL.split(",")
+            if email.strip()
+        ]
 
     def send_email(self, subject: str, body: str, attachment_path: str = None):
         """
@@ -26,7 +30,7 @@ class EmailService:
         # Configuración del mensaje
         message = MIMEMultipart()
         message["From"] = self.sender
-        message["To"] = self.recipient
+        message["To"] = ", ".join(self.recipients)
         message["Subject"] = subject
 
         # Cuerpo del mensaje
@@ -51,7 +55,9 @@ class EmailService:
                 server.starttls()
                 server.login(self.sender, self.password)
                 # sendmail requiere lista de destinatarios
-                server.sendmail(self.sender, [self.recipient], message.as_string())
-                logger.info(f"Correo enviado a {self.recipient} con asunto: {subject}")
+                server.sendmail(self.sender, self.recipients, message.as_string())
+                logger.info(
+                    f"Correo enviado a {', '.join(self.recipients)} con asunto: {subject}"
+                )
         except Exception as e:
             logger.error(f"Error al enviar el correo: {e}")

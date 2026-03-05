@@ -1,12 +1,13 @@
-import pytest
-import asyncio
+"""Tests for ReportScheduler behavior."""
+
 from unittest.mock import AsyncMock, MagicMock
+import pytest
 from app.scheduler.report_scheduler import ReportScheduler
 
 
 @pytest.fixture
 def mock_dependencies():
-    """Confirma que el scheduler y sus jobs se ejecuten correctamente de forma asincrona y controlada."""
+    """Provide mocked dependencies for scheduler tests."""
     metrics_service = MagicMock()
     # Mockear métodos asíncronos para generar reportes
     metrics_service.generate_daily_report = AsyncMock()
@@ -20,6 +21,11 @@ def mock_dependencies():
 
 @pytest.fixture
 def scheduler(mock_dependencies):
+    """Return a scheduler instance with a mocked APScheduler backend.
+
+    Args:
+        mock_dependencies (tuple): Metrics and email service mocks.
+    """
     metrics, email = mock_dependencies
     sched = ReportScheduler(metrics, email)
     # Mockear el scheduler interno de APScheduler para no iniciarlo realmente
@@ -29,7 +35,12 @@ def scheduler(mock_dependencies):
 
 @pytest.mark.asyncio
 async def test_scheduler_jobs_success(scheduler, mock_dependencies):
-    """Prueba el flujo exitoso: reporte generado -> email enviado."""
+    """Validate that emails are sent when reports are generated.
+
+    Args:
+        scheduler (ReportScheduler): Scheduler under test.
+        mock_dependencies (tuple): Metrics and email service mocks.
+    """
     metrics_service, email_service = mock_dependencies
 
     # 1. Test Daily Job Success
@@ -58,7 +69,12 @@ async def test_scheduler_jobs_success(scheduler, mock_dependencies):
 
 @pytest.mark.asyncio
 async def test_scheduler_jobs_empty_report(scheduler, mock_dependencies):
-    """Prueba que NO se envíe email si el reporte está vacío."""
+    """Validate that emails are not sent for empty reports.
+
+    Args:
+        scheduler (ReportScheduler): Scheduler under test.
+        mock_dependencies (tuple): Metrics and email service mocks.
+    """
     metrics_service, email_service = mock_dependencies
 
     # 1. Daily Job Empty
@@ -74,7 +90,12 @@ async def test_scheduler_jobs_empty_report(scheduler, mock_dependencies):
 
 @pytest.mark.asyncio
 async def test_scheduler_jobs_exception(scheduler, mock_dependencies):
-    """Prueba que una excepción en la generación del reporte no rompa el scheduler."""
+    """Ensure exceptions do not crash scheduled jobs.
+
+    Args:
+        scheduler (ReportScheduler): Scheduler under test.
+        mock_dependencies (tuple): Metrics and email service mocks.
+    """
     metrics_service, email_service = mock_dependencies
 
     # Simular error
@@ -90,7 +111,11 @@ async def test_scheduler_jobs_exception(scheduler, mock_dependencies):
 
 
 def test_scheduler_start(scheduler):
-    """Prueba que start() programa los jobs correctamente."""
+    """Verify that start() registers jobs and starts the scheduler.
+
+    Args:
+        scheduler (ReportScheduler): Scheduler under test.
+    """
     scheduler.start()
 
     # Verificar que se añadieron 2 trabajos

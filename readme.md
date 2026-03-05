@@ -1,259 +1,234 @@
-# 📡 Instagram Webhook — FastAPI
+# Instagram Webhook Service (FastAPI)
 
-Servicio backend para recibir y procesar eventos del webhook de Instagram/Meta usando **FastAPI** + **PostgreSQL** + **SQLAlchemy async**.
+Production-ready webhook receiver for Instagram/Meta events using FastAPI, async SQLAlchemy, PostgreSQL, and Nginx.
 
----
+## Table of Contents
 
-## 🚀 Setup del entorno
+- Overview
+- Features
+- Architecture
+- Request Flows
+- Signature Verification
+- Data Model
+- Project Structure
+- Configuration
+- Run Locally
+- Run with Docker
+- Endpoints
+- Testing
+- Documentation
 
-```bash
-# Actualizar pip
-python.exe -m pip install --upgrade pip
+## Overview
 
-# Crear entorno virtual
-python -m venv venv
+This service exposes two public endpoints: a GET verification endpoint used by Meta during webhook setup, and a POST endpoint that receives event payloads. The POST flow validates the HMAC signature (if enabled), validates payload structure, persists a raw log entry, and schedules background processing for event-specific actions. A scheduler can generate and email daily and weekly metrics reports.
 
-# Activar entorno virtual
-venv\Scripts\activate
+## Features
 
-# Instalar FastAPI con todas sus dependencias
-pip install "fastapi[standard]"
+- GET /webhook verification handshake
+- POST /webhook payload reception and signature validation
+- Async persistence of raw webhook logs in PostgreSQL
+- Background processing per event type
+- Scheduled daily and weekly metrics reports
+- Health endpoint for monitoring
+- Nginx reverse proxy with HTTPS and raw body forwarding
 
-# Guardar dependencias
-pip freeze > requirements.txt
+## Architecture
+
+```mermaid
+flowchart LR
+    meta[Meta Webhooks] --> nginx[Nginx TLS]
+    nginx --> api[FastAPI app]
+    api --> checker[WebhookChecker]
+    api --> processor[WebhookProcessor]
+    processor --> repo[WebhookLogRepository]
+    repo --> db[(PostgreSQL)]
+    scheduler[ReportScheduler] --> metrics[MetricsService]
+    metrics --> metricsRepo[MetricsRepository]
+    metricsRepo --> db
+    scheduler --> email[EmailService]
 ```
 
-> 💡 **En VS Code:** `Ctrl + Shift + P` → `Python: Select Interpreter` → selecciona el intérprete del venv
+Layer responsibilities:
 
----
+- Routes: HTTP endpoints, input validation, dependency wiring
+- Controllers: signature validation, payload validation, and event dispatching
+- Repositories: persistence and reporting queries
+- Services: metrics report generation and email delivery
+- Scheduler: periodic jobs
+- Infrastructure: FastAPI app lifecycle, async database connection, Nginx TLS
 
-## ▶️ Correr el servidor
+## Request Flows
 
-```bash
+### GET /webhook (Meta verification)
+
+```mermaid
+sequenceDiagram
+    participant Meta
+    participant Nginx
+    participant API
+    participant Checker
+    Meta->>Nginx: GET /webhook?hub.mode=subscribe&hub.verify_token=...&hub.challenge=...
+    Nginx->>API: proxy request
+    API->>Checker: verify(hub.mode, hub.verify_token)
+    Checker-->>API: challenge or 403
+    API-->>Meta: hub.challenge
+```
+
+### POST /webhook (Event ingestion)
+
+```mermaid
+sequenceDiagram
+    participant Meta
+    participant Nginx
+    participant API
+    participant Checker
+    participant Processor
+    participant Repo
+    participant DB
+    Meta->>Nginx: POST /webhook (payload + X-Hub-Signature-256)
+    Nginx->>API: proxy request (raw body)
+    API->>Checker: verify_signature(request)
+    Checker-->>API: ok or 403
+    API->>Processor: process(payload)
+    Processor->>Repo: save(event_type, payload)
+    Repo->>DB: insert webhook_logs
+    API-->>Meta: 200 OK
+```
+
+## Signature Verification
+
+Header format:
+
+```
+X-Hub-Signature-256: sha256=<hex>
+```
+
+Validation steps:
+
+1. Read raw request body bytes.
+2. Compute HMAC SHA256 using INSTAGRAM_APP_SECRET.
+3. Compare with header signature using constant-time comparison.
+
+Important: Nginx must pass the raw body without buffering; see nginx/conf.d/webhook.conf.
+
+## Data Model
+
+Table DataLake.webhook_logs:
+
+| Column        | Type        | Notes                         |
+| ------------- | ----------- | ----------------------------- |
+| id            | integer PK  | Auto increment                |
+| event_type    | varchar(50) | comments, messages, mentions  |
+| payload       | JSONB       | Raw Meta payload              |
+| received_at   | timestamptz | server_default now()          |
+| received_date | date        | server_default current_date() |
+| received_time | time        | server_default current_time() |
+
+SQL creation scripts live in app/db/queries.
+
+## Project Structure
+
+```
+app/
+  main.py                    # FastAPI app and lifespan hooks
+  routes/                    # HTTP endpoints
+  controllers/               # Request validation and processing
+  models/                    # SQLAlchemy ORM models
+  repositories/              # Database access and queries
+  services/                  # Metrics and email services
+  scheduler/                 # APScheduler jobs
+  config/                    # Settings, DB config, payload models
+  db/queries/                # SQL scripts for tables
+nginx/conf.d/                # Nginx virtual host
+test/                        # Pytest suite
+docker-compose.yml
+dockerfile
+requirements.txt
+Example.env
+```
+
+## Configuration
+
+Use Example.env as a template and create a .env file with the following keys:
+
+```
+# App
+SECRET_KEY=change_me
+DEBUG=false
+HOST=0.0.0.0
+PORT=8000
+
+# Database
+POSTGRES_USER=your_user
+POSTGRES_PASSWORD=your_password
+POSTGRES_HOST=your_db_host
+POSTGRES_PORT=5432
+POSTGRES_DB=your_db
+DB_ECHO=false
+
+# Instagram/Meta
+INSTAGRAM_VERIFY_TOKEN=your_verify_token
+INSTAGRAM_APP_SECRET=your_app_secret
+VERIFY_SIGNATURE=true
+INSTAGRAM_ACCESS_TOKEN=your_access_token
+INSTAGRAM_BUSINESS_ACCOUNT_ID=your_business_account_id
+
+# Email
+EMAIL_SENDER=sender@example.com
+EMAIL_PASSWORD=app_password_or_token
+RECIPIENT_EMAIL=recipient1@example.com,recipient2@example.com
+```
+
+Security note: keep .env out of version control and keep VERIFY_SIGNATURE enabled in production.
+
+## Run Locally
+
+```
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Alternative with FastAPI CLI:
+
+```
 fastapi dev app/main.py
 ```
 
----
-
-## 🌐 Exponer con Ngrok
-
-```bash
-# Configurar token
-ngrok config add-authtoken <tu_token>
-
-# Exponer puerto 8000
-ngrok http 8000
-```
-
----
-
-## 🏗️ Arquitectura del proyecto
+## Run with Docker
 
 ```
-project/
-│
-├── app/
-│   ├── main.py                        # Entry point, instancia FastAPI
-│   │
-│   ├── routes/
-│   │   └── webhook.py                 # Define rutas GET y POST /webhook
-│   │
-│   ├── controllers/
-│   │   ├── webhook_checker.py         # Valida firma y challenge de Meta
-│   │   └── webhook_processor.py      # Procesa eventos y persiste logs
-│   │
-│   ├── models/
-│   │   └── webhook_log.py             # Modelo SQLAlchemy → tabla webhook_logs
-│   │
-│   ├── repositories/
-│   │   └── webhook_log_repository.py  # Persiste logs en la DB (DIP)
-│   │
-│   └── config/
-│       ├── settings.py                # Variables de entorno con Pydantic
-│       ├── db_config.py               # Engine async + sesión + Base
-│       └── webhook_validator.py       # Modelos Pydantic del payload
-│
-├── .env                               # Secrets (nunca al repo ⚠️)
-├── .gitignore
-└── requirements.txt
+docker compose up --build
 ```
 
----
+Notes:
 
-## ⚙️ Variables de entorno (`.env`)
+- The compose file does not include a PostgreSQL container. Configure POSTGRES_HOST to point to your DB.
+- Update nginx/conf.d/webhook.conf with your domain and TLS certificate paths.
 
-```
-Settings
-├── App
-│   ├── SECRET_KEY
-│   ├── DEBUG
-│   ├── HOST
-│   └── PORT
-│
-├── Base de datos
-│   ├── POSTGRES_USER
-│   ├── POSTGRES_PASSWORD
-│   ├── POSTGRES_HOST
-│   ├── POSTGRES_PORT
-│   └── POSTGRES_DB
-│
-└── Instagram
-    ├── INSTAGRAM_VERIFY_TOKEN
-    ├── INSTAGRAM_APP_SECRET
-    ├── VERIFY_SIGNATURE
-    ├── INSTAGRAM_ACCESS_TOKEN
-    └── INSTAGRAM_BUSINESS_ACCOUNT_ID
-```
+## Endpoints
 
----
+- GET /health
+  - Returns a simple JSON status.
+- GET /webhook
+  - Meta verification endpoint. Expects query params hub.mode, hub.verify_token, hub.challenge.
+  - Returns the hub.challenge string when validation passes.
+- POST /webhook
+  - Receives Instagram webhook payloads.
+  - Validates X-Hub-Signature-256 when VERIFY_SIGNATURE is true.
+  - Persists raw payload and starts background processing.
 
-## 🔁 Flujo — Verificación inicial del webhook (GET)
-
-Cuando configuras el webhook en Meta, este hace un GET para verificar que el servidor es tuyo.
+## Testing
 
 ```
-1. app.include_router(webhook_router)  →  le dice a FastAPI "estas rutas también existen"
-2. Llega GET /webhook                  →  FastAPI busca la ruta que coincide y ejecuta su función
-3. WebhookChecker.verify()             →  compara hub.verify_token con el tuyo
-4. Responde con hub.challenge          →  Meta confirma el webhook ✅
+pytest
 ```
 
-```
-Meta Platform
-      │
-      │  GET /webhook?hub.mode=subscribe
-      │           &hub.verify_token=xxx
-      │           &hub.challenge=yyy
-      ▼
-┌────────────────────────────────┐
-│     Leer query params          │
-│  (manual, no Query(...))       │
-└────────────┬───────────────────┘
-             │
-             ▼
-┌────────────────────────────────┐
-│   ¿hub.verify_token válido?    │
-└──────┬─────────────────┬───────┘
-       │ NO              │ SÍ
-       ▼                 ▼
-   403 Forbidden    200 + hub.challenge
-```
+## Documentation
 
----
-
-## 📨 Flujo — Recepción de eventos (POST)
-
-```
-Instagram Platform
-      │
-      │  POST /webhook
-      │  { "object": "instagram", "entry": [...] }
-      ▼
-┌─────────────────────────────────────┐
-│        Verificar firma              │
-│   X-Hub-Signature-256 (HMAC SHA256) │
-└────────────────┬────────────────────┘
-                 │ ❌ → 403 Forbidden
-                 │ ✅
-                 ▼
-┌─────────────────────────────────────┐
-│        Validar object               │
-│    ¿ object === "instagram" ?       │
-└──────┬──────────────────────┬───────┘
-       │ NO                   │ SÍ
-       ▼                      ▼
-  400 Bad Request      Persistir log en DB
-                             │
-                             ▼
-                      Responder 200 OK
-                      (< 5 segundos ⚡)
-                             │
-                             ▼ (background task)
-                      Iterar entry[]
-                             │
-                             ▼
-                      Iterar changes[]
-                             │
-                             ▼
-                  ┌──────────────────────┐
-                  │   ¿Qué field es?     │
-                  ├──────────────────────┤
-                  │  "comments"          │
-                  │  "messages"          │
-                  │  "mentions"          │
-                  │  "stories"           │
-                  └──────────────────────┘
-```
-
----
-
-## 🔐 Verificación de firma (HMAC SHA256)
-
-Meta firma cada POST con tu `App Secret`. El header llega así:
-
-```
-X-Hub-Signature-256: sha256=a1b2c3d4e5f6...
-```
-
-El proceso de verificación:
-
-```
-Header recibido
-      │
-      ▼
-Extraer algoritmo y firma
-      │
-      ▼
-Obtener body crudo (bytes exactos)
-      │
-      ▼
-HMAC SHA256(APP_SECRET, raw_body)
-      │
-      ▼
-hmac.compare_digest(expected, received)
-      │
-  ❌ → 403     ✅ → continuar
-```
-
-> ⚠️ Se usa `hmac.compare_digest` (no `==`) para evitar ataques de timing.
-
----
-
-## 🗄️ Modelo de base de datos
-
-**Tabla:** `DataLake.webhook_logs`
-
-| Columna       | Tipo         | Descripción                      |
-| ------------- | ------------ | -------------------------------- |
-| `id`          | Integer PK   | Auto-incremental                 |
-| `event_type`  | String(50)   | `"comments"`, `"messages"`, etc. |
-| `payload`     | JSONB        | Payload completo de Meta         |
-| `received_at` | TIMESTAMP TZ | `server_default=now()`           |
-
----
-
-## 📐 Estructura del payload de Instagram
-
-Los modelos Pydantic siguen esta jerarquía (de adentro hacia afuera):
-
-```
-WebhookPayload
-├── object: str               ← "instagram"
-└── entry: list[Entry]
-    ├── id: str
-    ├── time: int
-    └── changes: list[Change]
-        ├── field: str        ← "comments" | "messages" | "mentions" | "stories"
-        └── value: Any
-```
-
----
-
-## 🧱 Principios de diseño aplicados
-
-| Principio                           | Dónde                                                                             |
-| ----------------------------------- | --------------------------------------------------------------------------------- |
-| **Singleton**                       | `db = Database()` y `settings = Settings()` — una sola instancia para toda la app |
-| **DIP** (Inversión de dependencias) | `WebhookLogRepository` recibe `AsyncSession` inyectada, no la crea                |
-| **Separación de responsabilidades** | `WebhookChecker` valida, `WebhookProcessor` procesa, `Repository` persiste        |
-| **Background tasks**                | `_handle_events` corre después de responder 200 para no bloquear a Meta           |
+- docs/technical_documentation.md
+- docs/architecture_report.md
+- docs/security_report.md
+- docs/refactoring_suggestions.md
+- docs/structure_improvements.md

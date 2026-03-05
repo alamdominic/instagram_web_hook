@@ -1,26 +1,15 @@
+"""Pydantic models for the Instagram webhook payload."""
+
 from typing import Any
 from pydantic import BaseModel
 
-"""
-Modelos Pydantic del payload de Instagram
-BaseModel es para validar datos que llegan en requests.
-El nombre debe de representar lo que modelamos, en este 
-caso un cambio en el webhook de Instagram.
-
-
-Nivel 1 — `object` y `entry`.
-Nivel 2 — tiene `id`, `time` y `changes`.
-Nivel 3 — tiene `field` y `value`.
-
-En Python debes definir los modelos de adentro hacia afuera,
-primero el más interno porque los externos dependen de él.
-
-"""
-
 
 class Change(BaseModel):
-    """
-    Representa un campo individual modificado (ej. comments, mentions).
+    """Represent a single changed field in a webhook event.
+
+    Attributes:
+        field (str): Field name (for example, comments or mentions).
+        value (Any): Field payload.
     """
 
     field: str
@@ -28,9 +17,12 @@ class Change(BaseModel):
 
 
 class Entry(BaseModel):
-    """
-    Representa una entrada en el evento, contiene ID, tiempo y lista de cambios.
-    Un webhook puede contener múltiples entradas.
+    """Represent a top-level entry in the webhook payload.
+
+    Attributes:
+        id (str): Entry id.
+        time (int): Unix timestamp in seconds.
+        changes (list[Change]): List of changes within the entry.
     """
 
     id: str
@@ -39,11 +31,11 @@ class Entry(BaseModel):
 
 
 class WebhookPayload(BaseModel):
-    """
-    Modelo raíz para validar la estructura del payload del webhook de Instagram/Meta.
+    """Root payload model for Instagram/Meta webhooks.
 
-    Estructura jerárquica:
-    Object -> Entry list -> Changes list -> Field/Value
+    Attributes:
+        object (str): Object type, expected to be "instagram".
+        entry (list[Entry]): Entries included in the webhook.
     """
 
     object: str

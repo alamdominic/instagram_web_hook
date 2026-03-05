@@ -1,17 +1,30 @@
-from sqlalchemy import select, func, desc, extract, cast, Date
+"""Repository for reporting queries over webhook logs."""
+
+from datetime import date, timedelta
+from sqlalchemy import desc, extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.webhook_log import WebhookLog
-from datetime import date, timedelta
 
 
 class MetricsRepository:
+    """Query helper for metrics aggregation."""
+
     def __init__(self, db_session: AsyncSession):
+        """Initialize the repository with an async session.
+
+        Args:
+            db_session (AsyncSession): Async database session.
+        """
         self.db_session = db_session
 
     async def get_daily_metrics(self, date):
-        """
-        Obtiene las métricas del día especificado.
-        EQUIVALENTE A "SELECT * FROM SCHEMA.TABLE WHERE received_date = :date"
+        """Return all webhook logs for a specific date.
+
+        Args:
+            date (date): Target date.
+
+        Returns:
+            list[WebhookLog]: List of webhook logs.
         """
         result = await self.db_session.execute(
             select(WebhookLog).filter(WebhookLog.received_date == date)
@@ -19,7 +32,14 @@ class MetricsRepository:
         return result.scalars().all()
 
     async def get_total_events(self, target_date: date) -> int:
-        """Cuenta el total de eventos recibidos en una fecha."""
+        """Count the total number of events for a given date.
+
+        Args:
+            target_date (date): Date to query.
+
+        Returns:
+            int: Total event count.
+        """
         result = await self.db_session.execute(
             select(func.count())
             .select_from(WebhookLog)
@@ -28,7 +48,14 @@ class MetricsRepository:
         return result.scalar() or 0
 
     async def get_peak_hour(self, target_date: date) -> dict:
-        """Determina la hora con más actividad en la fecha dada."""
+        """Return the hour with the highest activity on the given date.
+
+        Args:
+            target_date (date): Date to query.
+
+        Returns:
+            dict: Hour and total events, or None if no data.
+        """
         result = await self.db_session.execute(
             select(
                 extract("hour", WebhookLog.received_at).label("hora"),
@@ -43,7 +70,11 @@ class MetricsRepository:
         return {"hora": int(row.hora), "total": row.total} if row else None
 
     async def get_weekly_summary(self) -> list:
-        """Resumen de eventos de los últimos 7 días."""
+        """Return a summary of events for the last 7 days.
+
+        Returns:
+            list[dict]: List of day/total pairs.
+        """
         result = await self.db_session.execute(
             select(
                 func.date(WebhookLog.received_at).label("dia"),

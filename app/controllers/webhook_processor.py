@@ -1,3 +1,5 @@
+"""Controller for processing Instagram webhook events."""
+
 import logging
 from fastapi import HTTPException
 from app.repositories.webhook_log_repository import WebhookLogRepository
@@ -7,33 +9,26 @@ logger = logging.getLogger(__name__)
 
 
 class WebhookProcessor:
-    """
-    Controlador para procesar eventos de webhook de Instagram.
-
-    Se encarga de validar la estructura básica del payload, identificar el tipo de evento,
-    registrar logs informativos y persistir los datos en el repositorio.
-    """
+    """Validate payloads and persist webhook events."""
 
     def __init__(self, payload: WebhookPayload, repository: WebhookLogRepository):
-        """
-        Inicializa el procesador con el payload del webhook y el repositorio de logs.
+        """Initialize the processor with payload and repository.
 
         Args:
-            payload (WebhookPayload): El objeto validado con los datos del webhook.
-            repository (WebhookLogRepository): Repositorio para guardar el log en la DB.
+            payload (WebhookPayload): Validated webhook payload.
+            repository (WebhookLogRepository): Repository used to persist logs.
         """
         self.payload = payload
         self.repository = repository
 
     def process(self):
-        """
-        Valida que el webhook corresponda a un objeto 'instagram' y contenga entradas.
-
-        Raises:
-            HTTPException: Si el objeto no es 'instagram' o no hay entradas (entry).
+        """Validate the minimal payload requirements.
 
         Returns:
-            dict: Mensaje de confirmación de recepción.
+            dict: Confirmation message when validation passes.
+
+        Raises:
+            HTTPException: If the object type or entries are invalid.
         """
         if self.payload.object != "instagram":
             raise HTTPException(
@@ -45,22 +40,18 @@ class WebhookProcessor:
         return {"message": "Webhook recibido"}
 
     def _handle_events(self):
-        """
-        Tarea en segundo plano para procesar lógica específica de cada evento.
-
-        Itera sobre las entradas y cambios del payload para realizar acciones específicas
-        como logging diferenciado según el tipo de campo (comments, mentions, etc.).
-        """
+        """Handle event-specific processing in background tasks."""
         for entry in self.payload.entry:
+            masked_id = self._mask_identifier(entry.id)
             for change in entry.changes:
                 if change.field == "comments":
-                    logger.info(f"Nuevo comentario recibido. ID: {entry.id}")
+                    logger.info("Nuevo comentario recibido. entry_id=%s", masked_id)
                 elif change.field == "mentions":
-                    logger.info(f"Nueva mención recibida. ID: {entry.id}")
+                    logger.info("Nueva mención recibida. entry_id=%s", masked_id)
                 elif change.field == "messages":
-                    logger.info(f"Nuevo mensaje recibido. ID: {entry.id}")
+                    logger.info("Nuevo mensaje recibido. entry_id=%s", masked_id)
                 elif change.field == "stories":
-                    logger.info(f"Nueva historia recibida. ID: {entry.id}")
+                    logger.info("Nueva historia recibida. entry_id=%s", masked_id)
                 elif change.field in [
                     "standby",
                     "messaging_seen",
@@ -75,24 +66,35 @@ class WebhookProcessor:
                 else:
                     logger.warning(f"Campo no manejado: {change.field}")
 
-    async def save_log(self):
-        """
-        Guarda el payload del webhook en la base de datos.
+    @staticmethod
+    def _mask_identifier(value: str, visible: int = 4) -> str:
+        """Mask an identifier for safe logging.
 
-        Determina el event_type (ej. "comments") y persiste el payload completo
-        como un objeto JSONB crudo utilizando el repositorio.
+        Args:
+            value (str): Identifier to mask.
+            visible (int): Number of trailing characters to keep.
+
+        Returns:
+            str: Masked identifier.
         """
+        if not value:
+            return ""
+        if len(value) <= visible:
+            return "*" * len(value)
+        return f"{'*' * (len(value) - visible)}{value[-visible:]}"
+
+    async def save_log(self):
+        """Persist the raw webhook payload in the database."""
         event_type = self._extract_event_type()  # "comments" | "messages" | etc.
         raw_payload = self.payload.model_dump()  # dict serializable
 
         await self.repository.save(event_type, raw_payload)
 
     def _extract_event_type(self) -> str:
-        """
-        Extrae el tipo de evento del primer cambio en la primera entrada del payload.
+        """Extract the event type from the first entry.
 
         Returns:
-            str: El nombre del campo que cambió (ej. "comments"), o "unknown" si no se encuentra.
+            str: Field name such as "comments", or "unknown" if unavailable.
         """
         try:
             return self.payload.entry[0].changes[0].field

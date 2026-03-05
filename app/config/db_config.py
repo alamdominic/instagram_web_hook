@@ -1,26 +1,20 @@
-# app/config/database.py
+"""Database configuration and session management for async SQLAlchemy."""
+
 import logging
 from urllib.parse import quote_plus
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
 
 class Database:
-    """
-    Gestiona la conexión a PostgreSQL usando SQLAlchemy async.
+    """Manage a singleton async connection to PostgreSQL.
 
-    Patrón Singleton: una sola instancia para toda la app.
-    El engine y la sesión se crean una vez y se reutilizan.
-
-    Atributos:
-        engine: Motor de conexión async a PostgreSQL
-        session_factory: Fábrica de sesiones async
-
-    Uso:
-        from app.config.database import db, get_db
+    Attributes:
+        engine: Async engine instance.
+        session_factory: Factory for async sessions.
     """
 
     def __init__(self):
@@ -28,9 +22,10 @@ class Database:
         self.session_factory = self._create_session_factory()
 
     def _build_url(self) -> str:
-        """
-        Construye la URL de conexión con el password codificado.
-        Usa asyncpg como driver (requerido para FastAPI async).
+        """Build the async SQLAlchemy URL with an escaped password.
+
+        Returns:
+            str: Async PostgreSQL connection URL.
         """
         safe_password = quote_plus(settings.POSTGRES_PASSWORD)
         return (
@@ -39,18 +34,19 @@ class Database:
         )
 
     def _create_engine(self):
-        """
-        Crea el engine async.
-        echo=True en DEBUG para ver los SQL en consola.
+        """Create the async engine.
+
+        Returns:
+            AsyncEngine: SQLAlchemy async engine instance.
         """
         url = self._build_url()
         return create_async_engine(url, echo=settings.DB_ECHO)
 
     def _create_session_factory(self):
-        """
-        Crea la fábrica de sesiones.
-        expire_on_commit=False evita errores al acceder
-        a objetos después del commit en contexto async.
+        """Create the async session factory.
+
+        Returns:
+            sessionmaker: Async session factory.
         """
         return sessionmaker(
             bind=self.engine,
@@ -59,7 +55,11 @@ class Database:
         )
 
     async def check_connection(self) -> bool:
-        """Verifica que la conexión a PostgreSQL funciona."""
+        """Check database connectivity.
+
+        Returns:
+            bool: True if a connection can be opened, otherwise False.
+        """
         try:
             async with self.engine.connect():
                 logger.info("✅ Conectado a PostgreSQL")
@@ -69,16 +69,21 @@ class Database:
             return False
 
 
-# Instancia única (Singleton) para toda la app
+# Singleton instance for the application
 db = Database()
 
 
-# Dependencia para inyectar la sesión en las rutas de FastAPI
 async def get_db():
+    """Yield an async session for request-scoped database access.
+
+    Yields:
+        AsyncSession: Database session.
+    """
     async with db.session_factory() as session:
         yield session
 
 
-# Base para todos los modelos (tablas)
 class Base(DeclarativeBase):
+    """Declarative base for ORM models."""
+
     pass

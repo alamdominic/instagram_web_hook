@@ -1,37 +1,29 @@
-# app/repositories/webhook_log_repository.py
+"""Repository for persisting webhook logs."""
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.webhook_log import WebhookLog
 
 
 class WebhookLogRepository:
-    """
-    Repositorio encargado de la persistencia de logs de webhooks en la base de datos.
-
-    Responsabilidad única: persistir logs en la DB.
-    No valida, no transforma, no procesa.
-    """
+    """Persist webhook logs into the database."""
 
     def __init__(self, session: AsyncSession):
-        """
-        Inicializa el repositorio con una sesión de base de datos asíncrona.
+        """Initialize the repository with an async session.
 
         Args:
-            session (AsyncSession): Sesión de SQLAlchemy para interactuar con la DB.
+            session (AsyncSession): Async database session.
         """
         self.session = session
 
     async def save(self, event_type: str, payload: dict) -> WebhookLog:
-        """
-        Guarda un nuevo registro de webhook en la base de datos.
-
-        Crea una instancia de WebhookLog, la añade a la sesión y realiza el commit.
+        """Save a webhook log entry.
 
         Args:
-            event_type (str): El tipo de evento (ej. "comments", "messages").
-            payload (dict): El contenido completo del webhook en formato diccionario.
+            event_type (str): Event type such as "comments" or "messages".
+            payload (dict): Full webhook payload.
 
         Returns:
-            WebhookLog: La instancia del log guardado con su ID generado.
+            WebhookLog: Persisted log entry.
         """
         log = WebhookLog(event_type=event_type, payload=payload)
         self.session.add(log)

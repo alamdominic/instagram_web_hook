@@ -1,3 +1,5 @@
+"""Scheduler for periodic metrics reports."""
+
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -6,25 +8,21 @@ logger = logging.getLogger(__name__)
 
 
 class ReportScheduler:
-    """Clase para programar tareas de generación y envío de reportes.
-    ├── __init__(metrics_service)
-    ├── start()
-    ├── _daily_job()
-    └── _weekly_job()"""
+    """Schedule daily and weekly report jobs."""
 
     def __init__(self, metrics_service, email_service):
-        """Inicializa el scheduler con el servicio de métricas y el servicio de correo.
+        """Initialize the scheduler with report dependencies.
 
-        Args:A
-            metrics_service: Servicio de métricas para obtener datos.
-            email_service: Servicio de correo para enviar reportes.
+        Args:
+            metrics_service: Metrics service used to build reports.
+            email_service: Email service used to send reports.
         """
         self.metrics_service = metrics_service
         self.email_service = email_service
         self.scheduler = AsyncIOScheduler()
 
     def start(self):
-        """Inicia el planificador de tareas."""
+        """Register and start scheduled jobs."""
         # Reporte diario: Se ejecuta todos los días a las 8:00 AM
         self.scheduler.add_job(
             self._daily_job,
@@ -45,7 +43,7 @@ class ReportScheduler:
         logger.info("ReportScheduler iniciado correctamente.")
 
     async def _daily_job(self):
-        """Genera y envía el reporte diario."""
+        """Generate and send the daily report."""
         try:
             logger.info("Iniciando generación de reporte diario...")
             # Asumimos que metrics_service tiene este método
@@ -62,7 +60,7 @@ class ReportScheduler:
             logger.error(f"Error en _daily_job: {e}")
 
     async def _weekly_job(self):
-        """Genera y envía el reporte semanal."""
+        """Generate and send the weekly report."""
         try:
             logger.info("Iniciando generación de reporte semanal...")
             # Asumimos que metrics_service tiene este método

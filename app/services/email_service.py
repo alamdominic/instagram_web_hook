@@ -1,17 +1,26 @@
+"""Email service for sending reports via SMTP."""
+
 import logging
 import os
 import smtplib
+from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
 
 
 logger = logging.getLogger(__name__)
 
 
 class EmailService:
+    """Send emails with optional file attachments using SMTP."""
+
     def __init__(self, settings):
+        """Initialize the email service with configuration settings.
+
+        Args:
+            settings: Application settings object.
+        """
         self.sender = settings.EMAIL_SENDER
         self.password = settings.EMAIL_PASSWORD
         self.recipients = [
@@ -21,10 +30,12 @@ class EmailService:
         ]
 
     def send_email(self, subject: str, body: str, attachment_path: str = None):
-        """
-        Envía un email usando SMTP.
-        Aquí se implementaría la lógica para enviar el email.
-        Por ejemplo, usando smtplib o una librería de terceros.
+        """Send an email message using SMTP.
+
+        Args:
+            subject (str): Email subject line.
+            body (str): Plain text body.
+            attachment_path (str, optional): Path to attachment file.
         """
 
         # Configuración del mensaje
@@ -57,7 +68,9 @@ class EmailService:
                 # sendmail requiere lista de destinatarios
                 server.sendmail(self.sender, self.recipients, message.as_string())
                 logger.info(
-                    f"Correo enviado a {', '.join(self.recipients)} con asunto: {subject}"
+                    "Correo enviado a %s destinatarios con asunto: %s",
+                    len(self.recipients),
+                    subject,
                 )
         except Exception as e:
             logger.error(f"Error al enviar el correo: {e}")

@@ -1,23 +1,29 @@
-import logging
+"""Metrics service for generating daily and weekly reports."""
+
 import datetime
+import logging
 from app.repositories.metrics_repositories import MetricsRepository
 
 logger = logging.getLogger(__name__)
 
 
 class MetricsService:
+    """Generate formatted metrics reports using repository data."""
+
     def __init__(self, db_instance):
-        """
-        Servicio para generar reportes de métricas.
+        """Initialize the metrics service.
 
         Args:
-            db_instance: Instancia de la clase Database (app.config.db_config.db)
-                        que contiene session_factory.
+            db_instance: Database instance that provides session_factory.
         """
         self.db = db_instance
 
     async def generate_daily_report(self) -> str:
-        """Genera el contenido del reporte diario."""
+        """Generate the daily report content.
+
+        Returns:
+            str: Report content when data is available, otherwise None.
+        """
         today = datetime.date.today()
 
         # Obtenemos una nueva sesión para esta operación
@@ -49,7 +55,11 @@ class MetricsService:
                 return None
 
     async def generate_weekly_report(self) -> str:
-        """Genera el contenido del reporte semanal."""
+        """Generate the weekly report content.
+
+        Returns:
+            str: Report content when data is available, otherwise None.
+        """
         try:
             async with self.db.session_factory() as session:
                 repo = MetricsRepository(session)

@@ -1,8 +1,10 @@
+"""HTTP routes for health checks and Instagram webhook handling."""
+
 import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from app.config.webhook_validator import WebhookPayload
-from app.controllers.webhook_processor import WebhookProcessor
 from app.controllers.webhook_checker import WebhookChecker
+from app.controllers.webhook_processor import WebhookProcessor
 from app.config.db_config import get_db
 from app.repositories.webhook_log_repository import WebhookLogRepository
 
@@ -12,30 +14,26 @@ logger = logging.getLogger(__name__)
 
 @router.get("/health")
 def health_check():
-    """
-    Endpoint de verificación de estado.
-    Retorna un JSON simple para confirmar que el servicio está activo.
+    """Return a simple health status payload.
+
+    Returns:
+        dict: Health status response.
     """
     return {"status": "ok", "message": "Service is alive"}
 
 
 @router.get("/webhook")
 async def root(request: Request):
-    """
-    Endpoint de verificación para Meta (Instagram/Facebook).
-
-    Maneja el desafío 'hub.challenge' enviado por Meta para confirmar la propiedad del endpoint.
-    Valida 'hub.mode' y 'hub.verify_token'.
+    """Handle the GET verification handshake from Meta.
 
     Args:
-        request (Request): Objeto de solicitud FastAPI para acceder a los query params raw.
+        request (Request): Request object used to access query params.
 
     Returns:
-        int: El valor de 'hub.challenge' si la verificación es exitosa.
+        Response: Plain text response with the hub challenge.
 
     Raises:
-        HTTPException (400): Si faltan parámetros de verificación.
-        HTTPException (403): Si el token de verificación es incorrecto (manejado internamente por WebhookChecker).
+        HTTPException: If parameters are missing or the token is invalid.
     """
     # Log completo de lo que Meta realmente envió — útil para depurar
     params = dict(request.query_params)
@@ -65,23 +63,19 @@ async def receive_webhook(
     request: Request,
     db_session=Depends(get_db),
 ):
-    """
-    Endpoint principal para recibir notificaciones de webhook de Instagram.
-
-    Flujo:
-    1. Valida la firma de seguridad (X-Hub-Signature-256) antes de procesar nada.
-    2. Procesa la estructura del payload mediante WebhookProcessor.
-    3. Guarda el log crudo en la base de datos de forma asíncrona.
-    4. Agenda tareas en segundo plano (_handle_events) para lógica no bloqueante.
+    """Receive and process a webhook payload.
 
     Args:
-        payload (WebhookPayload): Cuerpo del mensaje validado por Pydantic.
-        background_tasks (BackgroundTasks): Gestor de tareas en segundo plano de FastAPI.
-        request (Request): Objeto request para verificar headers de firma.
-        db_session: Sesión de base de datos inyectada.
+        payload (WebhookPayload): Validated webhook payload.
+        background_tasks (BackgroundTasks): FastAPI background task manager.
+        request (Request): Raw request used for signature validation.
+        db_session: Database session injected by dependency.
 
     Returns:
-        dict: Mensaje de confirmación.
+        dict: Confirmation message.
+
+    Raises:
+        HTTPException: If signature or payload validation fails.
     """
     repository = WebhookLogRepository(db_session)
     checker = WebhookChecker()

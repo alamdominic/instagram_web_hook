@@ -1,14 +1,12 @@
-# app/models/webhook_log.py
-from sqlalchemy import Column, Integer, String, TIMESTAMP, Date, Time, func
+"""SQLAlchemy model for webhook log entries."""
+
+from sqlalchemy import Column, Date, Integer, String, TIMESTAMP, Time, func
 from sqlalchemy.dialects.postgresql import JSONB
 from app.config.db_config import Base
 
 
 class WebhookLog(Base):
-    """
-    Modelo SQLAlchemy que representa la tabla 'webhook_logs' en la base de datos.
-    Esta tabla almacena los registros crudos de los webhooks recibidos.
-    """
+    """SQLAlchemy model representing the DataLake.webhook_logs table."""
 
     __tablename__ = "webhook_logs"
     __table_args__ = {"schema": "DataLake"}
@@ -21,8 +19,9 @@ class WebhookLog(Base):
     received_time = Column(Time, server_default=func.current_time())
 
     def __repr__(self):
-        """
-        Representación de cadena del objeto para depuración.
-        Muestra el ID y el tipo de evento del log.
+        """Return a debug-friendly representation of the log entry.
+
+        Returns:
+            str: String representation with id and event type.
         """
         return f"<WebhookLog id={self.id} event_type={self.event_type}>"

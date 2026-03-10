@@ -14,10 +14,24 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self._buckets: dict = defaultdict(list)
+        self._last_cleanup = 0.0
+
+    def _cleanup_buckets(self, now: float) -> None:
+        window_start = now - self.window_seconds
+        for client_ip, timestamps in list(self._buckets.items()):
+            recent = [t for t in timestamps if t > window_start]
+            if recent:
+                self._buckets[client_ip] = recent
+            else:
+                del self._buckets[client_ip]
 
     async def dispatch(self, request: Request, call_next):
         if request.url.path == "/webhook" and request.method == "POST":
-            client_ip = request.client.host
+            forwarded_for = request.headers.get("x-forwarded-for")
+            if forwarded_for:
+                client_ip = forwarded_for.split(",")[0].strip()
+            else:
+                client_ip = request.client.host
 
             # Optional: allowlist Meta IPs — skip rate limiting for them
             if any(client_ip.startswith(prefix) for prefix in META_IP_RANGES):
@@ -25,11 +39,13 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
 
             # Sliding window counter
             now = time.time()
+            if now - self._last_cleanup >= self.window_seconds:
+                self._cleanup_buckets(now)
+                self._last_cleanup = now
             window_start = now - self.window_seconds
             self._buckets[client_ip] = [
                 t for t in self._buckets[client_ip] if t > window_start
             ]
-
             if len(self._buckets[client_ip]) >= self.max_requests:
                 return JSONResponse(
                     status_code=429, content={"detail": "Too many requests"}

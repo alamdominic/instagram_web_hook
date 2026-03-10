@@ -23,18 +23,18 @@ class ReportScheduler:
 
     def start(self):
         """Register and start scheduled jobs."""
-        # Reporte diario: Se ejecuta todos los días a las 8:00 AM
+        # Reporte diario: Se ejecuta todos los días a las 7:00 AM México ≈ 13:00 UTC (hora estándar)
         self.scheduler.add_job(
             self._daily_job,
-            CronTrigger(hour=19, minute=25, timezone="UTC"),
+            CronTrigger(hour=13, minute=00, timezone="UTC"),
             id="daily_report",
             replace_existing=True,
         )
 
-        # Reporte semanal: Se ejecuta todos los lunes a las 9:00 AM
+        # Reporte semanal: Se ejecuta todos los lunes a las 7:00 AM México ≈ 13:00 UTC (hora estándar)
         self.scheduler.add_job(
             self._weekly_job,
-            CronTrigger(day_of_week="tue", hour=19, minute=25, timezone="UTC"),
+            CronTrigger(day_of_week="mon", hour=13, minute=00, timezone="UTC"),
             id="weekly_report",
             replace_existing=True,
         )
